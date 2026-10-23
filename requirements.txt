@@ -1,0 +1,6 @@
+# macOS (Apple Silicon):  pip install -r requirements.txt
+# NVIDIA (Linux / WSL2 / Windows): pip install -r requirements.txt "mlx[cuda12]"
+mlx
+mlx-lm
+numpy
+psutil
