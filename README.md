@@ -92,6 +92,49 @@ python compare.py <mac-folder-name> <nvidia-folder-name>
 
 ---
 
+## PyTorch route (NEW, 2026-10-28): the plan is MLX on the Mac, PyTorch + CUDA on NVIDIA
+
+We decided: **the Mac keeps MLX, the Windows laptops use PyTorch with CUDA.** So on the Windows laptops, run these tests (no MLX, no WSL needed). They measure the numbers our simulator and demo currently only *assume*:
+
+| Test | Measures | Replaces this assumption |
+|---|---|---|
+| 5 · `torch_env_check.py` | GPU name, **dedicated** VRAM, CUDA works, gloo (network) available | — |
+| 6 · `torch_train.py` | QLoRA training speed (tokens/s) and peak GPU memory, same settings as the Mac's Test 1 | "NVIDIA = 2.92 × the Mac" |
+| 7 · `gloo_test.py` | Time to average 20 MB (one training step's gradients) across laptops over Wi-Fi | "all-reduce over 5 MB/s Wi-Fi" |
+| `net_bench.py` | Raw Wi-Fi speed and delay between two laptops | "Wi-Fi 5 MB/s, 5 ms" |
+
+### Set up (each Windows laptop, PowerShell)
+```powershell
+git clone https://github.com/RajvanshMalhotra/mlx_test.git; cd mlx_test
+py -3.11 -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu126   # RTX 50-series: use cu130 instead
+pip install -r requirements-torch.txt
+python torch_env_check.py
+```
+`cuda_available` must say `True`. If it says `False`, update the NVIDIA driver and reinstall torch with the line above.
+
+### Run (each Windows laptop, on its own)
+```powershell
+python torch_train.py                                   # 1.5B model, same size the Mac measured
+python torch_train.py --model Qwen/Qwen2.5-3B-Instruct  # 3B, if it fits
+```
+The first run downloads the model (about 3 GB for 1.5B). An out-of-memory error is a result too, so leave it in.
+
+### Run (all three laptops together, same Wi-Fi or a phone hotspot)
+1. Firewall, once, in an **admin** PowerShell:
+   `New-NetFirewallRule -DisplayName "gloo_test" -Direction Inbound -Protocol TCP -LocalPort 1024-65535 -Program (Get-Command python).Source -Action Allow`
+2. Find the Mac's IP on the Mac: `ipconfig getifaddr en0`.
+3. Within about 60 seconds of each other:
+   - Mac: `python gloo_test.py --rank 0 --world 3 --master <Mac IP>`
+   - Windows 1: `python gloo_test.py --rank 1 --world 3 --master <Mac IP>`
+   - Windows 2: `python gloo_test.py --rank 2 --world 3 --master <Mac IP>`
+4. If it hangs at "joining": check that the firewall rule exists, and try adding `--iface Wi-Fi` on Windows and `--iface en0` on the Mac.
+5. Also run `net_bench.py` between the Mac and one Windows laptop (`server` on the Mac, `client <Mac IP>` on Windows).
+
+Then share the results as described in section 3 (`results-<your-name>` branch).
+
+---
+
 ## 3. Share your results
 ```bash
 git checkout -b results-<your-name>

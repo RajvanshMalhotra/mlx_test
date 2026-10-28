@@ -1,0 +1,8 @@
+# PyTorch route for the NVIDIA laptops (Windows). Install torch FIRST with CUDA (see README), then:
+#   pip install -r requirements-torch.txt
+transformers>=4.46
+peft>=0.13
+bitsandbytes>=0.45
+accelerate>=1.0
+numpy
+psutil
